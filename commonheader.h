@@ -15,9 +15,11 @@
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QFileInfoList>
+#include <QtCore/QHash>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QProcessEnvironment>
 #include <QtCore/QRegExp>
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>

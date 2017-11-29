@@ -86,6 +86,55 @@ public:
         return QStandardPaths::writableLocation(QStandardPaths::HomeLocation).section("/", -1, -1);
     }
 
+    static QString GetStandardPath(const QString& key)
+    {
+        static QHash<QString, QString> path_hash;
+        if (path_hash.isEmpty())
+        {   // 加入特殊目录
+            path_hash["DesktopLocation"] = QStandardPaths::writableLocation((QStandardPaths::DesktopLocation));
+            path_hash["DocumentsLocation"] = QStandardPaths::writableLocation((QStandardPaths::DocumentsLocation));
+            path_hash["FontsLocation"] = QStandardPaths::writableLocation((QStandardPaths::FontsLocation));
+            path_hash["ApplicationsLocation"] = QStandardPaths::writableLocation((QStandardPaths::ApplicationsLocation));
+            path_hash["MusicLocation"] = QStandardPaths::writableLocation((QStandardPaths::MusicLocation));
+            path_hash["MoviesLocation"] = QStandardPaths::writableLocation((QStandardPaths::MoviesLocation));
+            path_hash["PicturesLocation"] = QStandardPaths::writableLocation((QStandardPaths::PicturesLocation));
+            path_hash["TempLocation"] = QStandardPaths::writableLocation((QStandardPaths::TempLocation));
+            path_hash["HomeLocation"] = QStandardPaths::writableLocation((QStandardPaths::HomeLocation));
+            path_hash["DataLocation"] = QStandardPaths::writableLocation((QStandardPaths::DataLocation));
+            path_hash["CacheLocation"] = QStandardPaths::writableLocation((QStandardPaths::CacheLocation));
+            path_hash["GenericDataLocation"] = QStandardPaths::writableLocation((QStandardPaths::GenericDataLocation));
+            path_hash["RuntimeLocation"] = QStandardPaths::writableLocation((QStandardPaths::RuntimeLocation));
+            path_hash["ConfigLocation"] = QStandardPaths::writableLocation((QStandardPaths::ConfigLocation));
+            path_hash["DownloadLocation"] = QStandardPaths::writableLocation((QStandardPaths::DownloadLocation));
+            path_hash["GenericCacheLocation"] = QStandardPaths::writableLocation((QStandardPaths::GenericCacheLocation));
+            path_hash["GenericConfigLocation"] = QStandardPaths::writableLocation((QStandardPaths::GenericConfigLocation));
+            path_hash["AppDataLocation"] = QStandardPaths::writableLocation((QStandardPaths::AppDataLocation));
+            path_hash["AppConfigLocation"] = QStandardPaths::writableLocation((QStandardPaths::AppConfigLocation));
+            path_hash["AppLocalDataLocation"] = QStandardPaths::writableLocation((QStandardPaths::AppLocalDataLocation));
+            path_hash["DataLocation"] = QStandardPaths::writableLocation((QStandardPaths::DataLocation));
+            // 加入环境变量
+            QProcessEnvironment envs = QProcessEnvironment::systemEnvironment();
+            for (const QString& key : envs.keys())
+            {
+                path_hash[key.toLower()] = envs.value(key);
+            }
+        }
+        if (path_hash.contains(key))
+        {
+            return path_hash[key];
+        }
+        return "";
+    }
+
+    // 获取环境变量PATH路径
+    static QStringList GetPaths()
+    {
+#if defined(Q_OS_WIN)
+        return GetStandardPath("path").split(";");
+#else
+        return GetStandardPath("path").split(":");
+#endif
+    }
 
     /*---------------------------网络操作---------------------------*/
     static int GetHttpRequest(const QString& url, const QString& method, const QString& postdata, QString& response,
@@ -134,8 +183,6 @@ public:
         reply->deleteLater();
         return QNetworkReply::NoError;
     }
-
-
 };
 
 #endif // UTILS_H
