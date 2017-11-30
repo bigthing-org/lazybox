@@ -1,105 +1,105 @@
-Ŀ�꣺һ������Ⱥ��Ϊ��ͨ�û���ϵͳ��������
-ƽ̨��֧��Windows/Linux/MacOS/Android/iOS
+目标：一个适用群体为普通用户的系统工具软件
+平台：支持Windows/Linux/MacOS/Android/iOS
 
-��Ҫ���Ŀ�꣺Windowsϵͳ�û���C��װϵͳ���´���ռ��
-��Ҫ����ֶΣ�ϵͳ����+��������+ϵͳ����+���ļ�����+����ת��
+首要解决目标：Windows系统用户在C盘装系统导致磁盘占满
+首要解决手段：系统清理+软件清理+系统瘦身+大文件分析+软件转移
+ 
 
-
-һ�����ܵ�(ÿ���Ƕ������)��
-	1.�ļ�������
-		������������
-		������ۼ�����
-		���ļ�����
-		��������
-		��־����
-		����������
+一、功能点(每个是独立插件)：
+	1.文件清理：
+		软件垃圾清理
+		浏览器痕迹清理
+		大文件搜索
+		补丁清理
+		日志清理
+		启动项清理
 		........
-	   ɾ��
-		��ͨɾ��
-		����ɾ��
-		����ɾ��
-		�ļ�ϵͳɾ��
-	2.������ת��(����C�������������������)
-	3.�ڴ�����
-	4.���ݻָ���
-		�������鿴
-		ɾ�����ݻָ�
-		��ʽ���ָ�
-		�����༭/MBR�ָ�
-	5.��������
+	   删除
+		普通删除
+		重启删除
+		驱动删除
+		文件系统删除
+	2.大软件转移(对于C盘容量不够的情况有用)
+	3.内存清理
+	4.数据恢复：
+		分区表查看
+		删除数据恢复
+		格式化恢复
+		分区编辑/MBR恢复
+	5.快速搜索
 
-�����ֽ׶�����
-	Ŀǰ��Ҫ�ǿ�������ģ�飬����ģ�飺
-		��ʼ���������������ƥ��·�����ļ��Ĺ��򣬰���windows����Ŀ¼�������׺����������·������Щ·����Ҫ��ע�����ȡ�����ڼ��ϴӷ�������̬��ȡ���ù��ܣ���ʼ�����Ժ�ſ��Խ�����������ÿ������Ҳ�����Ƿ�����Ϊɾ��ѡ����û����ã����ļ���������ΪĬ�ϲ�ɾ��
-		�����������ݲ������������ļ���ȡ�ļ���Ϣ��������������·�����ļ����ӵ���ɾ�����񡣾��Բ��ܱ��ѣ����ļ�������һ�������������
-		�������������������񣬰���ɾ���ļ����񡢷������񡢴洢�����̳߳ص��ȣ�ÿ������ʵ��һ��״̬�ص��ӿڣ����ڵõ���ǰ������ɶ���
-		�洢��������ɾ��С�ļ���ѹ�����ݣ�������ɾ�Ļָ�
-		ɾ���������Զ��ַ�ʽ�Է������Ľ������ɾ���������з������Ժ�Ҫ�ڽ��в����Ժ�����ϱ���״̬�ص�
-	ÿ��Ҫɾ�����ļ����ͣ����������ʽ���ܲ�̫һ��(�����׺��������temp·�������������ļ�������)��ÿ����������Ͷ��̳��������࣬������ϸ��ƻ����ÿ����Ľӿڣ��ֱ�ʵ�ּ���
+二、现阶段任务
+	目前主要是开发清理模块，包含模块：
+		初始化：保存待分析的匹配路径及文件的规则，包括windows特殊目录、特殊后缀及常用软件路径；有些路径需要从注册表获取；后期加上从服务器动态拉取配置功能，初始化好以后才可以进行下述任务；每个规则也包括是否设置为删除选项，由用户配置，大文件查找设置为默认不删除
+		分析器：根据策略搜索本地文件获取文件信息，将符合条件的路径和文件添加到待删除任务。绝对不能爆搜；大文件查找是一个特殊分析器；
+		调度器：并发处理任务，包括删除文件任务、分析任务、存储任务；线程池调度；每个任务实现一个状态回调接口，用于得到当前任务完成多少
+		存储器：将已删除小文件做压缩备份，用作误删的恢复
+		删除器：尝试多种方式对分析器的结果进行删除；后期有服务器以后还要在进行操作以后进行上报；状态回调
+	每种要删除的文件类型，具体操作方式可能不太一样(比如后缀分析器、temp路径分析器、大文件分析器)，每个特殊的类型都继承上述基类，后面详细设计会给出每个类的接口，分别实现即可
 
-	��Ϊ���¼����׶Σ�
-		1.�Ѽ���Ϣ�׶Σ���processmonitor����ccleaner, windows������ʦ���������ӵȳ������·���������кܶ��������ˡ���Ȼ��Щ�ǲ����ģ�ͨ�����ǻ��������ںܶ�����ֶ�ɾ���Ĵ��ļ�������ռ��ͷ�ģ�����֮�����Ŀ��ܾ�����ʱĿ¼������Ŀ¼�����һ�ν��д��ļ�����(����������ʽ����)
-		2.���ο��� ������ -> ����������������ɾ���� -> �洢�� -> ���ļ�����
-		3.ʵ�ִӷ�������ȡ���ú��ϱ�����
+	分为如下几个阶段：
+		1.搜集信息阶段，用processmonitor分析ccleaner, windows清理大师、超级兔子等常见检测路径，现在有很多新软件了。当然这些是不够的，通常我们机器里会存在很多可以手动删除的大文件，这是占大头的，除此之外最大的可能就是临时目录、缓存目录。最后一次进行大文件查找(具体搜索方式待定)
+		2.依次开发 调度器 -> 策略器、分析器、删除器 -> 存储器 -> 大文件查找
+		3.实现从服务器拉取配置和上报功能
 		
-�����������񻮷֣����-����-����-���ߣ���
-* ������ƣ�ʹ��QT������ĿǰWindows����360�߷½���պϣ������У�
-* ��̨�����������ϱ��û���Ϣ����̬�·����ԣ�������
-* ���ܿ�����ʹ��C++�ͱ�׼��Ĳ������������������ƽ̨��QT��Ŀǰ��Ҫ���ļ���������������ƽ̨����ƽӿڣ������У�
-* δ���������ѧϰ�������ܹ����Ƿ������ļ�����Ҫ�ռ������ԣ��ļ�·����ʱ�䡢���������������ߡ�ǩ������С����׺��
+三、整体任务划分（设计-开发-测试-上线）：
+* 界面设计，使用QT开发，目前Windows端用360高仿界面凑合（开发中）
+* 后台开发，用于上报用户信息、动态下发策略（待定）
+* 功能开发，使用C++和标准库的插件化开发，不依赖于平台和QT。目前主要做文件清理这个插件。跨平台的设计接口（开发中）
+* 未来加入机器学习能力智能估计是否垃圾文件，需要收集的属性：文件路径、时间、所属软件、发行者、签名、大小、后缀名
 
-Ŀǰ����
-* �ռ�������������ο�ccleaner�Լ�ħ�� ��һ���£�
+目前任务：
+* 收集可清理垃圾项，参考ccleaner以及魔方 （一个月）
 
 
-�����ļ�����������config.json������
-��һ��Ϊ����������磺
-	browser 	����������ļ�
-	imagcache 	ͼƬ����ͼ�����ļ�
-	tmp			windows��ʱĿ¼
+垃圾文件清理规则用config.json描述：
+第一层为组件名，比如：
+	browser 	浏览器缓存文件
+	imagcache 	图片缩略图缓存文件
+	tmp			windows临时目录
 	
-�ڶ���Ϊϵͳ���ͣ����磺
-	win			windowsϵͳ
-	linux		linuxϵͳ
-	maccos		macϵͳ
-	android		androidϵͳ
-	ios			iosϵͳ
+第二层为系统类型，比如：
+	win			windows系统
+	linux		linux系统
+	maccos		mac系统
+	android		android系统
+	ios			ios系统
 
-������Ϊ������ʽ��ÿ���������ֵ��ʽ��ÿ���ֵ�����������ԣ�
-	__comment__	������Ϣ����ѡ��
-	describ		�����������ͣ���ѡ��
-	type		���ڶ�λĿ¼����ѡ��
-		�������������������͵ķ�ʽ��Ŀǰ���Ը������·�ʽ��λ��
-		csidl	ͨ��api��ȡCSIDL_���Ӧ������Ŀ¼
-		sysdir	ͨ��api��ȡϵͳĿ¼
+第三层为数组形式，每个数组是字典格式，每个字典包括如下属性：
+	__comment__	附加信息（可选）
+	describ		描述垃圾类型（可选）
+	type		用于定位目录（必选）
+		描述用于搜索这种类型的方式，目前可以根据以下方式定位：
+		csidl	通过api获取CSIDL_宏对应的特殊目录
+		sysdir	通过api获取系统目录
 		alldrive c:\ d:\ e:\ ..
-		������ʽ������
-	locate		���ڶ�λĿ¼����ѡ��
-		ָ����type������ϸ�Ļ�ȡĿ¼�ķ�ʽ
+		其他方式待添加
+	locate		用于定位目录（必选）
+		指定比type更加详细的获取目录的方式
 		windowsdir	x:\windows
 		systemdir	x:\windows\system x:\windows\syswow64
-	relative	���ڶ�λĿ¼����ѡ��
-		����ָ�������type��ʽ��λ���ض�Ŀ¼�����λ�ã���
-		Ҫ��λc:\1\*.*����Ҫ��type����Ϊalldrive��locate����Ϊ1����
-	root		���ڶ�λ�ļ�����ѡ��
-		ָ���Ƿ�ֻ��������ڸ���Ŀ¼��Ŀ¼���ļ�
-		0		ֻ��������Ŀ¼��Ŀ¼�µ��ļ�
-		1		��������Ŀ¼����Ŀ¼�µ��ļ�
+	relative	用于定位目录（可选）
+		用于指定相对于type方式定位的特定目录的相对位置，比
+		要定位c:\1\*.*，需要将type设置为alldrive，locate设置为1即可
+	root		用于定位文件（可选）
+		指定是否只搜索相对于给定目录根目录的文件
+		0		只搜索给定目录根目录下的文件
+		1		搜索给定目录及子目录下的文件
 	
 
 	// Internet Explorer / Chrome / Firefox / Safari
 
-// IDA���ݿ�����
-// Git����Դ������
-// Python pyc����
+// IDA数据库清理
+// Git多余源码清理
+// Python pyc清理
 
-// Lenovo��������
-// QQ��������
-// ΢����������
-// Ѹ����������&��ʷ��¼&��ʱ�ļ�����
-// Ӱ��������Ѹ��Ӱ���������ա���Ѷ��Ƶ����
-// �ٶ�������ʱ�ļ�����
-// �㶹����������
+// Lenovo软件清理
+// QQ软件清理
+// 微信软件清理
+// 迅雷下载数据&历史记录&临时文件清理
+// 影音软件：迅雷影音、爱奇艺、腾讯视频清理
+// 百度网盘临时文件清理
+// 豌豆荚数据清理
 // Windows.old
 // iTunes
 
@@ -131,10 +131,10 @@
 	
 #if defined(Q_OS_WIN)
 #include <windows.h>
-// Win7 Xp·���Ա�
+// Win7 Xp路径对比
 #define CSIDL_DOCUMENTS      0x0005  // C:\Users\root\Documents                                     C:\Documents and Settings\Administrator\My Documents
 #define CSIDL_FONTS          0x0014  // C:\Windows\Fonts                                            C:\Windows\Fonts
-#define CSIDL_COMMON_DESKTOP 0x0019  // C:\Users\Public\Desktop                                     C:\Documents and Settings\All Users\����
+#define CSIDL_COMMON_DESKTOP 0x0019  // C:\Users\Public\Desktop                                     C:\Documents and Settings\All Users\桌面
 #define CSIDL_APPDATA        0x001a  // C:\Users\root\AppData\Roaming                               C:\Documents and Settings\Administrator\Application Data
 #define CSIDL_LOCAL_APPDATA  0x001c  // C:\Users\root\AppData\Local                                 C:\Documents and Settings\Administrator\Local Settings\Application Data
 #define CSIDL_INTERNET_CACHE 0x0020  // C:\Users\root\AppData\Local\Microsoft\Windows\INetCache     C:\Documents and Settings\Administrator\Local Settings\Temporary Internet Files
@@ -144,7 +144,7 @@
 #define CSIDL_PROFILE        0x0028  // C:\Users\root                                               C:\Documents and Settings\Administrator
 #endif
 
-    // ��ȡ�ٶ������������б� BaiduYunGuanjia.db
+    // 获取百度网盘已下载列表 BaiduYunGuanjia.db
     // HKEY_CURRENT_USER\Software\Baidu\BaiduYunGuanjia
     // HKEY_LOCAL_MACHINE\Software\Baidu\BaiduYunGuanjia
 
@@ -154,46 +154,46 @@
     // C:\Users\Public\Thunder Network\XMP5\ProgramData\Playlists
     //  default.lua default.lua.bak playlist.lua playlist.lua.bak
 
-    // Windows �����ļ�
+    // Windows 备份文件
 
     /*
-     *��������
-     *  ��ҳ��� IE����� �ȸ������ ����ٶ� �ٶ������ ΢������ UC����� ��������� 360����� �������� QQ�����
-     *  ���ع��� Ѹ�� Ѹ�׼��ٰ� QQ����  �ٶ����� UTorrent EMule BitComet �쳵
-     *  �������� QQ ΢�� �������� İİ YY���� MSN ����
-     *  ����绰
-     *  Զ�̿���
-     *  �������
-     *  ������
-     *  ѹ����ѹ
-     *  ���繲�� VaGaa
-     *  �����ʼ� QQ���� Foxmail outlook
+     *网络软件
+     *  网页浏览 IE浏览器 谷歌浏览器 桌面百度 百度浏览器 微博桌面 UC浏览器 傲游浏览器 360浏览器 火狐浏览器 QQ浏览器
+     *  下载工具 迅雷 迅雷极速版 QQ旋风  百度网盘 UTorrent EMule BitComet 快车
+     *  聊天软件 QQ 微信 阿里旺旺 陌陌 YY语音 MSN 飞信
+     *  网络电话
+     *  远程控制
+     *  网络加速
+     *  网络监测
+     *  压缩解压
+     *  网络共享 VaGaa
+     *  电子邮件 QQ邮箱 Foxmail outlook
      *
-     *ϵͳ����
-     *  ���뷨   �ٶ����뷨 �ѹ����뷨 ��Ʒ���
-     *  Ӳ������ �������� ³��ʦ U��ʦ ��������
-     *  �Ķ���   WPS Office / Adobe reader / ����Ķ��� QQ�Ķ� �ٶ��Ķ�
-     *  �ֻ����� �ٶ��ֻ�����  Ӧ�ñ� iTunes PP����
-     *  ѹ������ WinRAR ��ѹ ��ѹ winzip 7zip 360ѹ��
-     *  ģ����   ҹ��ģ���� VirutalBox Vmware
-     *  ���ݷ��� һ��GHOST DiskGenius
-     *  ˢ������ ����ˢ�� ��˼���� kingroot ˢ����ʦ root����
-     *  ���ݻָ� �������ݻָ���ʦ ���ݻָ����� easyrecovery superrecovery
+     *系统软件
+     *  输入法   百度输入法 搜狗输入法 极品五笔
+     *  硬件工具 驱动精灵 鲁大师 U大师 驱动人生
+     *  阅读器   WPS Office / Adobe reader / 福昕阅读器 QQ阅读 百度阅读
+     *  手机助手 百度手机助手  应用宝 iTunes PP助手
+     *  压缩工具 WinRAR 好压 快压 winzip 7zip 360压缩
+     *  模拟器   夜神模拟器 VirutalBox Vmware
+     *  备份分区 一键GHOST DiskGenius
+     *  刷机工具 奇兔刷机 爱思助手 kingroot 刷机大师 root精灵
+     *  数据恢复 万能数据恢复大师 数据恢复精灵 easyrecovery superrecovery
      *
-     *רҵ����
-     *  ��ѧ���� AutoCAD 
-     *  �ʵ�    �е��ʵ� �ȸ跭�� ��ɽ�ʰ� ���˹ �е��Ʊʼ�
-     *  ��Ʊ���� ͬ��˳ �����Ƹ� ���ǻ� Ǯ����� ���˲�����
+     *专业工具
+     *  数学工具 AutoCAD 
+     *  词典    有道词典 谷歌翻译 金山词霸 灵格斯 有道云笔记
+     *  股票软件 同花顺 东方财富 大智慧 钱龙金典 益盟操盘手
      *
-     *ý�幤��
-     *  ������� ������ PPTV PPS UUSee ���� ƤƤ QQLive
-     *  ��Ƶ���� ����Ӱ�� ������Ƶ �ſ���Ƶ �첥 Ѹ�׿��� mplayer ��Ѷ��Ƶ RealPlayer QQӰ��
-     *  ��Ƶ���� QQ���� �ṷ���� ���������� �ٶ����ֺ� Ϻ������ Foobar �������ֺ�
-     *  ͼƬ�༭ ��ͼ���� PhotoShop ��Ӱħ���� ����Pͼ ��ţӰ��
-     *  ֱ��    ����ֱ��
+     *媒体工具
+     *  网络电视 爱奇艺 PPTV PPS UUSee 风行 皮皮 QQLive
+     *  视频播放 暴风影音 乐视视频 优酷视频 快播 迅雷看看 mplayer 腾讯视频 RealPlayer QQ影音
+     *  音频播放 QQ音乐 酷狗音乐 网易云音乐 百度音乐盒 虾米音乐 Foobar 酷我音乐盒
+     *  图片编辑 美图秀秀 PhotoShop 光影魔术手 天天P图 可牛影像
+     *  直播    花样直播
      *
-     *��Ϸ
-     *  QQ��Ϸ ������Ϸ���� �Ʒ��羺ƽ̨ VS����ƽ̨
+     *游戏
+     *  QQ游戏 联众游戏大厅 浩方电竞平台 VS竞技平台
      */
 	 
 	         "browser": {
@@ -202,7 +202,7 @@
                     "type": "csidl",
                     "locate": 32,
                     "__comment__": "CSIDL_INTERNET_CACHE",
-                    "describ": "IE����",
+                    "describ": "IE缓存",
                     "relative": "",
                     "root": 0
                 },
@@ -218,7 +218,7 @@
                     "type": "csidl",
                     "locate": 34,
                     "__comment__": "CSIDL_HISTORY",
-                    "describ": "IE ��ʷ",
+                    "describ": "IE 历史",
                     "relative": "",
                     "root": 0
                 },
@@ -226,7 +226,7 @@
                     "type": "csidl",
                     "locate": 28,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "IE����",
+                    "describ": "IE缓存",
                     "relative": "Microsoft/Windows/WebCache",
                     "root": 0
                 },
@@ -234,7 +234,7 @@
                     "type": "csidl",
                     "locate": 28,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "Chrome����",
+                    "describ": "Chrome缓存",
                     "relative": "Google/Chrome/User Data",
                     "root": 0
                 },
@@ -242,7 +242,7 @@
                     "type": "csidl",
                     "locate": 28,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "�Ա�����",
+                    "describ": "猎豹缓存",
                     "relative": "liebao/User Data",
                     "root": 0
                 }
@@ -254,7 +254,7 @@
 					"type": "csidl",
                     "locate": 40,
                     "__comment__": "CSIDL_PROFILE",
-                    "describ": "Android Studio��ʱ�ļ�",
+                    "describ": "Android Studio临时文件",
                     "relative": ".AndroidStudio2|.AndroidStudio3|.gradle",
                     "root": 0
 				},
@@ -262,7 +262,7 @@
 					"type": "csidl",
                     "locate": 28,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "Ĭ��Android SDKĿ¼",
+                    "describ": "默认Android SDK目录",
                     "relative": "Android",
                     "root": 0
 				}
@@ -274,7 +274,7 @@
                     "type": "csidl",
                     "locate": 26,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "QQ�������",
+                    "describ": "QQ多余组件",
                     "relative": "Tencent",
                     "root": 0
                 },
@@ -282,7 +282,7 @@
                     "type": "csidl",
                     "locate": 5,
                     "__comment__": "CSIDL_DOCUMENTS",
-                    "describ": "QQ�����¼",
+                    "describ": "QQ聊天记录",
                     "relative": "sub:Registry.db",
                     "root": 0
                 },
@@ -290,7 +290,7 @@
                     "type": "csidl",
                     "locate": 26,
                     "__comment__": "CSIDL_APPDATA",
-                    "describ": "QQ�������",
+                    "describ": "QQ多余组件",
                     "relative": "Tencent",
                     "root": 0
                 }
@@ -302,7 +302,7 @@
                     "type": "csidl",
                     "locate": 28,
                     "__comment__": "CSIDL_LOCAL_APPDATA",
-                    "describ": "Windows Mail�ʼ�",
+                    "describ": "Windows Mail邮件",
                     "relative": "Microsoft/Windows Mail",
                     "root": 0
                 }
