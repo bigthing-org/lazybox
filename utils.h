@@ -24,14 +24,13 @@ public:
         for (const QFileInfo& fi : dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot))
         {
             QString p = fi.absoluteFilePath();
-            if (filter.isEmpty() || rx.exactMatch(filter))
+            if (fi.isFile() && (filter.isEmpty() || rx.exactMatch(p)))
             {
                 out.push_back(p);
-                maxlayer--;
-                if (maxlayer > 0)
-                {
-                    ListFiles(p, out, filter, maxlayer);
-                }
+            }
+            if (fi.isDir() && maxlayer - 1 > 0)
+            {
+                ListFiles(p, out, filter, maxlayer - 1);
             }
         }
     }
@@ -124,6 +123,30 @@ public:
             return path_hash[key];
         }
         return "";
+    }
+
+    // 获取特殊文件夹对应到每个用户的目录
+    static QStringList GetPathForAllUsers(const QString& path)
+    {
+        QStringList output;
+        QString curuser = GetCurrentUserName();
+        if (!path.contains(curuser, Qt::CaseInsensitive))
+        {
+            output.push_back(path);
+        }
+        else
+        {
+            for (const QString& user : GetAllUsersNames())
+            {
+                QString rpath = path;
+                QString lpath = rpath.replace(curuser, user);
+                if (FileExist(lpath))
+                {
+                    output.push_back(lpath);
+                }
+            }
+        }
+        return output;
     }
 
     // 获取环境变量PATH路径
