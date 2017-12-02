@@ -1,35 +1,28 @@
 #ifndef DOWNLOADER_H
 #define DOWNLOADER_H
 
-#include "../commonheader.h"
 #include "../cleaner.h"
 
+// 下载工具清理
+
 // 迅雷看看清理
-class ThunderCleaner : Cleaner
+class QThunderCleaner : QCleaner
 {
 public:
-    // 实现该类型扫描
-    virtual void Analysis(std::vector<FileInfo>& targets)
-    {
-        std::vector<std::string> pathset;
-        std::string desktop_dir = Utils::GetWinDir(CSIDL_COMMON_DESKTOP);
-        std::string cid_store_path;
+    virtual bool Init() { QCleaner::Init(); return true; }
 
-        // 特殊文件
-        cid_store_path = Utils::GetUpDir(desktop_dir) + "\\Thunder Network\\cid_store.dat";
-        if (Utils::FileExist(cid_store_path))
+    virtual void Analysis()
+    {
+        QString thunderdir = GetThunderDir();
+        if (thunderdir.isEmpty())
         {
-            pathset.push_back(cid_store_path);
+            return;
         }
-        cid_store_path = Utils::GetUpDir(desktop_dir) + "\\Thunder Network\\DownloadSDK\\Profiles\\cid_store.dat";
-        if (Utils::FileExist(cid_store_path))
-        {
-            pathset.push_back(cid_store_path);
-        }
+        QStringList pathset;
 
         // 下载文件
         QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-        db.setDatabaseName("D:\\thunder\\Profiles\\TaskDb.dat");
+        db.setDatabaseName(thunderdir + "\\Profiles\\TaskDb.dat");
         if (db.open())
         {
             QSqlQuery query;
@@ -38,36 +31,37 @@ public:
             {
                 while (query.next())
                 {
-                    std::string path = query.value("SavePath").toString().toStdString().c_str();
-                    std::string file = query.value("Name").toString().toStdString().c_str();
-                    std::string wholepath = path + file;
-                    pathset.push_back(wholepath.c_str());
+                    QString savepath = query.value("SavePath").toString().toUtf8().data();
+                    QString name = query.value("Name").toString().toUtf8().data();
+                    pathset.push_back(savepath + name);
                 }
             }
+            db.close();
         }
-        for (const std::string& p : pathset)
+
+        qDebug() << "--------------------------迅雷文件---------------------------";
+        for (const QString& p : pathset)
         {
-            FileInfo fi(p, true, CLEAN_TYPE_DOWNLOADER, "上传下载记录");
-            targets.push_back(fi);
+            qDebug() << p;
+            this->targets.push_back(QCleanFileInfo(p, "迅雷文件", true, DOWNLOAD_CLEAN_THUNDER));
+            this->totalsize += Utils::GetFileSize(p);
         }
     }
 
-    virtual void Delete(std::string data)
+    virtual void Delete()
     {
         // 清空TaskDb.dat
         // 清空cid_store.dat
         // 删除下载文件
+        // 删除临时文件
     }
 
-    virtual std::vector<std::string> GetThunderDir() // 获取所有可找到的迅雷安装目录
+    virtual QString GetThunderDir() // 获取所有可找到的迅雷安装目录
     {
-        std::vector<std::string> outlist;
-#if defined(Q_OS_WIN)
-        std::set<std::string> findlist;
         // 搜索本地路径
-        for (std::string& drive : Utils::GetLocalDrives())
+        for (QString& drive : Utils::GetPartitions())
         {
-            const char* suffix[] =
+            QString suffix[] =
             {
                 "\\Program Files\\Thunder Network\\Thunder",
                 "\\Program Files\\Thunder Network\\Thunder9",
@@ -76,141 +70,175 @@ public:
             };
             for (int i = 0; i < ARRLEN(suffix); i++)
             {
-                std::string path = drive + suffix[i];
+                QString path = drive + suffix[i];
                 if (Utils::FileExist(path))
                 {
-                    findlist.insert(path);
+                    return path;
                 }
             }
         }
-       // 搜索注册表
-        HKEY hkey1;
-        RegOpenKeyA(HKEY_CLASSES_ROOT, "thunder\\DefaultIcon", &hkey1);
-        if (hkey1 != 0)
+        // 搜索注册表
+        QSettings reg("HKEY_CLASSES_ROOT\\thunder\\DefaultIcon", QSettings::NativeFormat);
+        if (reg.contains("."))
         {
-            char path[MAX_PATH];
-            long size = sizeof(path);
-            RegQueryValueA(hkey1, "", path, &size);
-            std::string thunderpath = path;
-            std::string::size_type pos = thunderpath.find("\\Program\\Thunder.exe");
-            if (pos != std::string::npos)
+            QString thunderpath = reg.value(".").toString();
+            QString path = thunderpath.left(thunderpath.indexOf("\\Program\\Thunder.exe"));
+            if (Utils::FileExist(path))
             {
-                findlist.insert(thunderpath.substr(0, pos));
+                return path;
             }
         }
-        for (const std::string& path : findlist)
+        return "";
+    }
+};
+
+// 百度网盘清理
+class QBaiduNetDiskCleaner : QCleaner
+{
+public:
+    virtual bool Init() { QCleaner::Init(); return true; }
+
+    virtual void Analysis()
+    {
+        QString baidunetdiskdir = GetBaiduNetDiskDir();
+        if (baidunetdiskdir.isEmpty())
         {
-            outlist.push_back(path);
+            return;
         }
-#endif
-        return outlist;
+        QStringList pathset;
+        for (const QString& subdir : Utils::GetDownDirs(baidunetdiskdir + "\\users"))
+        {// ...\Baidu\BaiduNetdisk\users\83318853b0d5e4b06dae0f32be0245e3\BaiduYunGuanjia.db
+            QString dbfile = subdir + "\\BaiduYunGuanjia.db";
+            if (Utils::FileExist(dbfile))
+            {
+                // 下载文件
+                QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+                db.setDatabaseName(dbfile);
+                if (db.open())
+                {
+                    QSqlQuery query;
+                    query.prepare("select local_filename, base_dir from backup_file");
+                    if (query.exec())
+                    {
+                        while (query.next())
+                        {
+                            QString path = query.value("SavePath").toString();
+                            QString file = query.value("Name").toString();
+                            pathset.push_back(path + file);
+                        }
+                    }
+                    query.prepare("select local_path from download_file");
+                    if (query.exec())
+                    {
+                        while (query.next())
+                        {
+                            QString path = query.value("local_path").toString();
+                            pathset.push_back(path);
+                        }
+                    }
+                    query.prepare("select local_path from download_history_file");
+                    if (query.exec())
+                    {
+                        while (query.next())
+                        {
+                            QString path = query.value("local_path").toString();
+                            pathset.push_back(path);
+                        }
+                    }
+                    query.prepare("select local_path from upload_file");
+                    if (query.exec())
+                    {
+                        while (query.next())
+                        {
+                            QString path = query.value("local_path").toString();
+                            pathset.push_back(path);
+                        }
+                    }
+                    query.prepare("select local_path from upload_history_file");
+                    if (query.exec())
+                    {
+                        while (query.next())
+                        {
+                            QString path = query.value("local_path").toString();
+                            pathset.push_back(path);
+                        }
+                    }
+
+                    db.close();
+                }
+            }
+        }
+        qDebug() << "----------------------百度网盘文件----------------------";
+        for (const QString& p : pathset)
+        {
+            qDebug() << p;
+            this->targets.push_back(QCleanFileInfo(p, "百度网盘文件", true, DOWNLOAD_CLEAN_BAIDUDISK));
+            this->totalsize += Utils::GetFileSize(p);
+        }
     }
 
-    virtual std::vector<std::string> GetThunderDownloadDir() // 获取所有可找到的迅雷下载目录
+    virtual void Delete()
     {
-        std::vector<std::string> outlist;
-#if defined(Q_OS_WIN)
-        std::set<std::string> findlist;
+        // BaiduYunGuanjia.db
+        // 删除下载文件
+        // 删除临时文件
+    }
 
-        for (std::string& path : GetThunderDir())
+    virtual QString GetBaiduNetDiskDir()
+    {
+        // 搜索注册表
         {
-            std::string inipath1 = path + "\\Profiles\\config.ini";
-            std::string inipath2 = path + "\\Profiles\\newtask.ini";
-            do {
-                tinyxml2::XMLDocument doc;
-                doc.LoadFile(inipath1.c_str());
-                if (doc.Error())
-                {
-                    break;
-                }
-                tinyxml2::XMLElement* profile = doc.RootElement();
-                if (profile == 0)
-                {
-                    break;
-                }
-                tinyxml2::XMLElement* section = profile->FirstChildElement("section");
-                while (section != 0)
-                {
-                    if (!strcmp(section->Attribute("id"), "ReservedSettings"))
-                    {
-                        tinyxml2::XMLElement* key = section->FirstChildElement("key");
-                        while (key != 0)
-                        {
-                            if (!strcmp(key->Attribute("id"), "InitPath"))
-                            {
-                                std::string val = key->GetText();
-                                if (val != "")
-                                {
-                                    if (val != "" && val[val.length() - 1] == '\\')
-                                    {
-                                        val = val.substr(0, val.length() - 1);
-                                        findlist.insert(val);
-                                    }
-                                }
-                            }
-                            key = key->NextSiblingElement();
-                        }
-                    }
-                    else if (!strcmp(section->Attribute("id"), "TaskDefaultSettings"))
-                    {
-                        tinyxml2::XMLElement* key = section->FirstChildElement("key");
-                        while (key != 0)
-                        {
-                            if (!strcmp(key->Attribute("id"), "DefaultPath"))
-                            {
-                                std::string val = key->GetText();
-                                if (val != "" && val[val.length() - 1] == '\\')
-                                {
-                                    val = val.substr(0, val.length() - 1);
-                                    findlist.insert(val);
-                                }
-                            }
-                            key = key->NextSiblingElement();
-                        }
-                    }
-                    else if (!strcmp(section->Attribute("id"), "PathAndCategory"))
-                    {
-                        tinyxml2::XMLElement* key = section->FirstChildElement("key");
-                        while (key != 0)
-                        {
-                            if (!strcmp(key->Attribute("id"), "LastUsedPath"))
-                            {
-                                std::string val = key->GetText();
-                                if (val != "")
-                                {
-                                    if (val != "" && val[val.length() - 1] == '\\')
-                                    {
-                                        val = val.substr(0, val.length() - 1);
-                                        findlist.insert(val);
-                                    }
-                                }
-                            }
-                            key = key->NextSiblingElement();
-                        }
-                    }
-                    section = section->NextSiblingElement();
-                }
-            } while (false);
-
-            /*
-                // config.ini为utf8编码，newtask.ini为gb2312编码
-                char DefaultPath[MAX_PATH], LastUsedPath[MAX_PATH];
-                GetPrivateProfileStringA("TaskDefaultSettings", "DefaultPath", "", DefaultPath, MAX_PATH, inipath2.c_str());
-                findlist.insert(DefaultPath);
-                GetPrivateProfileStringA("PathAndCategory", "LastUsedPath", "", LastUsedPath, MAX_PATH, inipath2.c_str());
-                findlist.insert(LastUsedPath);
-            */
-        }
-
-        for (const std::string& path : findlist)
-        {// 迅雷路径不能包含系统路径
-            if (path != "" && path.find("Windows") == std::string::npos)
+            QSettings reg("HKEY_CURRENT_USER\\Software\\Baidu\\BaiduYunGuanjia", QSettings::NativeFormat);
+            if (reg.contains("installDir"))
             {
-                outlist.push_back(path); // 由于编码问题，仍然有重复
+                QString baidupath = reg.value("installDir").toString();
+                QString path = baidupath.left(baidupath.indexOf("\\Program\\Thunder.exe"));
+                if (Utils::FileExist(path))
+                {
+                    return path;
+                }
             }
         }
-#endif
-        return outlist;
+
+        {
+            QSettings reg("HKEY_CURRENT_USER\\Software\\Wow6432Node\\Baidu\\BaiduYunGuanjia", QSettings::NativeFormat);
+            if (reg.contains("installDir"))
+            {
+                QString baidupath = reg.value("installDir").toString();
+                QString path = baidupath.left(baidupath.indexOf("\\Program\\Thunder.exe"));
+                if (Utils::FileExist(path))
+                {
+                    return path;
+                }
+            }
+        }
+
+        {
+            QSettings reg("HKEY_LOCAL_MACHINE\\Software\\Baidu\\BaiduYunGuanjia", QSettings::NativeFormat);
+            if (reg.contains("installDir"))
+            {
+                QString baidupath = reg.value("installDir").toString();
+                QString path = baidupath.left(baidupath.indexOf("\\Program\\Thunder.exe"));
+                if (Utils::FileExist(path))
+                {
+                    return path;
+                }
+            }
+        }
+
+        {
+            QSettings reg("HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Baidu\\BaiduYunGuanjia", QSettings::NativeFormat);
+            if (reg.contains("installDir"))
+            {
+                QString baidupath = reg.value("installDir").toString();
+                QString path = baidupath.left(baidupath.indexOf("\\Program\\Thunder.exe"));
+                if (Utils::FileExist(path))
+                {
+                    return path;
+                }
+            }
+        }
+        return "";
     }
 };
 
