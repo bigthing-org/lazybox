@@ -4,6 +4,7 @@
 #define SIGSIZE 0x1000 // 预留0x1000字节判断磁盘类型
 
 #include "ntfs.h"
+#include "fat32.h"
 #include "partition_common.h"
 
 // 分区表格式 GPT / MBR / 动态磁盘
@@ -168,17 +169,21 @@ public:
             memset(buf, 0, SIGSIZE);
             f.seek(begin);
             f.read(buf, SIGSIZE);
-            if (((ntfs_boot_sector*)buf)->system_id == NTFS_Magic)
+            if (((NTFS::ntfs_boot_sector*)buf)->system_id == NTFS::NTFS_Magic)
             {
-                QNtfsPartition partition(f, begin, size);
+                NTFS::QNtfsPartition partition(f, begin, size);
                 if (partition.IsValid())
                 {
                     this->partitions.push_back(partition);
                 }
             }
-            else
+            else if (((FAT::fat_boot_sector*)buf)->n.system_id  == FAT::FAT_Magic)
             {
-                // todo ......
+                FAT::QFatPartition partition(f, begin, size);
+                if (partition.IsValid())
+                {
+                    this->partitions.push_back(partition);
+                }
             }
 
 
