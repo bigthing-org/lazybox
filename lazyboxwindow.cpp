@@ -2,8 +2,8 @@
 #include "ui_lazyboxwindow.h"
 
 #include "commonheader.h"
-#include "scheduler.h"
-#include "config.h"
+#include "scheduler.hpp"
+
 
 LazyBoxWindow::LazyBoxWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -21,10 +21,21 @@ LazyBoxWindow::~LazyBoxWindow()
 
 void LazyBoxWindow::on_pushButton_clicked()
 {
-    auto l = []() { qDebug() << "lambda ok"; };
-    QTask<decltype(l)> t(l);
-    t.run();
-    ui->textEdit->setText("ok\nokok\nokok\nokok\nokok\nokok\nokok\nokok\nokok\nokok\nok");
+    // QSystemCleaner cleaner;
+    // cleaner.Init();
+    // cleaner.Analysis();
+
+    // QThunderCleaner cleaner;
+    // cleaner.Init();
+    // cleaner.Analysis();
+
+    // QBaiduNetDiskCleaner cleaner;
+    // cleaner.Init();
+    // cleaner.Analysis();
+
+    // QBaiduImeCleaner cleaner;
+    // cleaner.Init();
+    // cleaner.Analysis();
 }
 
 void LazyBoxWindow::on_textEdit_textChanged()

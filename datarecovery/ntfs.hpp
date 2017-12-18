@@ -1,10 +1,6 @@
 #ifndef NTFS_H
 #define NTFS_H
 
-#pragma pack(push)
-#pragma pack(1)
-
-#include <stdint.h>
 #include "partition.h"
 
 namespace NTFS
@@ -61,6 +57,10 @@ namespace NTFS
         NAMESPACE_DOS       = 2,
         NAMESPACE_WIN32DOS  = 3
     };
+
+
+#pragma pack(push)
+#pragma pack(1)
 
     struct ntfs_boot_sector
     {
@@ -233,7 +233,7 @@ namespace NTFS
     };
 
 
-    #pragma pack(pop)
+#pragma pack(pop)
 
 
 
@@ -257,10 +257,11 @@ namespace NTFS
         char16_t filename[260];         // 文件名
 
     public:
-        virtual bool IsDir() { return flags & FILE_ATTRIBUTE_DIRECTORY; }
-        virtual bool IsFile() { return flags & FILE_ATTRIBUTE_ARCHIVE; } // ??
-        virtual unsigned long long GetFileSize() { return datasize; }
+        virtual bool IsDir() { return this->flags & FILE_ATTRIBUTE_DIRECTORY; }
+        virtual bool IsFile() { return this->flags & FILE_ATTRIBUTE_ARCHIVE; } // ??
+        virtual unsigned long long GetFileSize() { return this->datasize; }
         virtual int GetType() { return PARTITION_TYPE_NTFS; }
+        virtual QString GetName() { return QString::fromUtf16(this->filename); }
     };
 
     class QNtfsPartition : public QPartition
@@ -272,11 +273,18 @@ namespace NTFS
             this->size = size;
             this->type = 0; // 设置为无效
             this->readHeader(f);
-            this->mftoff = begin + this->ntfs_header.mft_lcn * this->sectors_per_cluster * this->sector_size;
-            this->readMFT(f);
-
+            this->mftoff = this->ntfs_header.mft_lcn;
+            this->mftoff *= this->sectors_per_cluster * this->sector_size;
+            this->mftoff += begin;
             this->type = PARTITION_TYPE_NTFS; // 设置为有效
-        };
+            this->Analysis(f);
+        }
+
+        bool Analysis(QFile& f)
+        {
+            this->readMFT(f);
+            return true;
+        }
 
         virtual ~QNtfsPartition() {}
 
@@ -324,8 +332,8 @@ namespace NTFS
                         curlcn = (curlcn << 8) + (uint8_t)buf[indx + ol];
                     }
                     baselcn += curlcn; // 每个runlist记录偏移地址都是相对于上一次
-                    data.push_back(baselcn * this->sectors_per_cluster * this->sector_size);
-                    data.push_back(lcnsize * this->sectors_per_cluster * this->sector_size);
+                    data.push_back(((unsigned long long)baselcn) * this->sectors_per_cluster * this->sector_size);
+                    data.push_back(((unsigned long long)lcnsize) * this->sectors_per_cluster * this->sector_size);
                     indx += ol_;
                 }
             }
@@ -373,8 +381,7 @@ namespace NTFS
         {
             if (mftrecord.magic != FILE_Magic)
             {
-                this->errtype = 100; // begins at 100
-                return false;
+                this->errtype |= 0x10000; // begins at 100
             }
 
             filerecord.mftindx = mftrecord.mft_record_number; // 本文件MFT号
@@ -385,12 +392,12 @@ namespace NTFS
                 ntfs_attribheader* header = (ntfs_attribheader*)((char*)&mftrecord + attriboff);
                 if (header->type == 0xffffffff || (header->type & 0xF0) == 0)
                     break; // 遇到结尾
-                if (header->type == 0x30)
+                if (header->type == 0x20)
                 {
                     // 文件名属性，必常驻
                     if (header->bNonResident != 0)
                     {
-                        this->errtype = 101;
+                        this->errtype |= 0x200000;
                         break; // Attribute Error
                     }
                     ntfs_attribresident* header_ = (ntfs_attribresident*)header;
@@ -443,51 +450,42 @@ namespace NTFS
             this->errtype = 0;
             if (this->ntfs_header.marker != 0xAA55)
             {
-                this->errtype = 1;
-                return;
+                this->errtype |= 1;
             }
             if (this->ntfs_header.reserved > 0)
             {
-                this->errtype = 2;
-                return;
+                this->errtype |= 2;
             }
             if (this->ntfs_header.fats > 0)
             {
-                this->errtype = 3;
-                return;
+                this->errtype |= 4;
             }
             if (this->ntfs_header.dir_entries[0] != 0 || this->ntfs_header.dir_entries[1] != 0 )
             {
-                this->errtype = 4;
-                return;
+                this->errtype |= 8;
             }
             if (this->ntfs_header.sectors[0]!=0 || this->ntfs_header.sectors[1]!=0)
             {
-                this->errtype = 5;
-                return;
+                this->errtype |= 16;
             }
             if (this->ntfs_header.fat_length !=0)
             {
-                this->errtype = 6;
-                return;
+                this->errtype |= 0x20;
             }
             if( this->ntfs_header.total_sect != 0)
             {
-                this->errtype = 7;
-                return;
+                this->errtype |= 0x40;
             }
             if (this->ntfs_header.sectors_nbr == 0)
             {
-                this->errtype = 8;
-                return;
+                this->errtype |= 0x80;
             }
             switch (this->ntfs_header.sectors_per_cluster)
             {
               case 1: case 2: case 4: case 8: case 16: case 32: case 64: case 128:
                 break;
               default:
-                this->errtype = 9;
-                return;
+                this->errtype |= 0x100;
             }
             // 生成Unique Id
             QByteArray headdata = QByteArray::fromRawData((char*)&this->ntfs_header, sizeof(this->ntfs_header));
@@ -495,7 +493,6 @@ namespace NTFS
         }
 
     private:
-        QString uniqueid; // 唯一标识该分区的字符串，用于数据库查询
         ntfs_boot_sector ntfs_header;
         int errtype; // 如果分区存在错误则记录
         unsigned long long mftoff;
@@ -524,6 +521,10 @@ namespace NTFS
         virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord)
         {
             QVector<QRecordFile*> result;
+            if (filerecord == 0)
+            {
+                return QVector<QRecordFile*>();
+            }
             if (const_cast<QRecordFile*>(filerecord)->GetType() != PARTITION_TYPE_NTFS)
             {
                 return result;
@@ -536,13 +537,52 @@ namespace NTFS
             return result;
         }
 
+        virtual QVector<QRecordFile*> ListFiles(const QString& path)
+        {
+            if (path == "/")
+            {
+                return GetRootFiles();
+            }
+            QRecordFile* f = this->GetFileForPath(path);
+            if (f == 0)
+            {
+                return QVector<QRecordFile*>();
+            }
+            return this->ListFiles(f);
+        }
+
         // 根据路径定位文件
         virtual QRecordFile* GetFileForPath(const QString& path)
         {
             // 路径形式:  /a/b/c/d.txt
-            QStringList seg = path.split('/');
-            // todo
-            return 0;
+            int current_mft = MFT_ROOT_INDX;
+            QStringList path_vec;
+            for (const QString& p : path.split("/"))
+            {
+                if (p.length() != 0)
+                {
+                    path_vec.push_back(p);
+                }
+            }
+            QNtfsFileRecord* target = 0;
+            for (const QString& p : path_vec)
+            {
+                bool find = false;
+                for (QNtfsFileRecord& file : filesystem[current_mft])
+                {
+                    if (file.GetName() == p)
+                    {
+                        current_mft = file.mftindx;
+                        target = &file;
+                        find = true;
+                    }
+                }
+                if (!find)
+                {
+                    break;
+                }
+            }
+            return target;
         }
 
         //拷贝文件

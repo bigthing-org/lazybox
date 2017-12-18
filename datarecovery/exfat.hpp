@@ -5,10 +5,10 @@
 #define EXFAT_BS_SIZE	512
 
 struct exfat_super_block {
-        unsigned char   jmp_boot[3];            /* boot strap short or near jump */
-        unsigned char   oem_id[8];              /* oem-id */
-        unsigned char   unused0;                /* 0x00... */
-        uint32_t  	unused1[13];
+    unsigned char   jmp_boot[3];            /* boot strap short or near jump */
+    unsigned char   oem_id[8];              /* oem-id */
+    unsigned char   unused0;                /* 0x00... */
+    uint32_t  	unused1[13];
     uint64_t  	start_sector;           /* 0x40 start sector of partition */
     uint64_t  	nr_sectors;             /* number of sectors of partition */
     uint32_t  	fat_blocknr;            /* 0x50 start blocknr of FAT */

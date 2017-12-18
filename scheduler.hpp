@@ -36,7 +36,6 @@ private:
     }
 
     QTaskPool(const QTaskPool&);
-    QTaskPool& operator=(const QTaskPool&);
 
 public:
     QTaskPool getInstance()

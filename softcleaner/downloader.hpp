@@ -1,7 +1,7 @@
 #ifndef DOWNLOADER_H
 #define DOWNLOADER_H
 
-#include "../cleaner.h"
+#include "../cleaner.hpp"
 
 // 下载工具清理
 

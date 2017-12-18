@@ -2,7 +2,7 @@
 #define VIDEOPLAYER_H
 
 
-#include "../cleaner.h"
+#include "../cleaner.hpp"
 
 // 视频音频图片播放
 

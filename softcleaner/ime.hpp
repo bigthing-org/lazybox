@@ -1,7 +1,7 @@
 #ifndef INPUTMETHODEDITOR_H
 #define INPUTMETHODEDITOR_H
 
-#include "../cleaner.h"
+#include "../cleaner.hpp"
 
 // 输入法
 

@@ -1,7 +1,9 @@
 #ifndef PARTITION_H
 #define PARTITION_H
 
+#include "commonheader.h"
 
+#define SIGSIZE 0x1000 // 预留0x1000字节判断磁盘类型
 
 enum DiskTypeDescrib
 {
@@ -117,10 +119,14 @@ enum DiskTypeDescrib
 
 enum
 {
-    PARTITION_TYPE_NTFS = 0x10,
-    PARTITION_TYPE_FAT = 0x20,
-    PARTITION_TYPE_EXT = 0x30,
-    PARTITION_TYPE_HFS = 0x40,
+    PARTITION_TYPE_NTFS = 0x100,
+    PARTITION_TYPE_FAT32 = 0x200,
+    PARTITION_TYPE_EXT = 0x300,
+    PARTITION_TYPE_HFS = 0x400,
+
+    DISK_TYPE_BASIC = 0x1000,
+    DISK_TYPE_GPT = 0x2000,
+    DISK_TYPE_DYN = 0x3000,
 };
 
 // 定义抽象接口
@@ -132,46 +138,183 @@ public:
     virtual bool IsFile() { return false; }
     virtual unsigned long long GetFileSize() { return 0; }
     virtual int GetType() { return 0; }
+    virtual QString GetName() { return ""; }
 };
 
 class QPartition
 {
 public:
-    QPartition() { type = 0; }
 
+    virtual bool Analysis(QFile& f) = 0;
     // 解析分区，检测是否有误
-    virtual bool IsValid() { return false; }
-
+    virtual bool IsValid() = 0;
     // 获取根目录文件
-    virtual QVector<QRecordFile*> GetRootFiles() { return QVector<QRecordFile*>(); }
-
+    virtual QVector<QRecordFile*> GetRootFiles() = 0;
     // 获取当前目录下的文件和目录
-    virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord) { return QVector<QRecordFile*>(); }
-
+    virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord) = 0;
+    virtual QVector<QRecordFile*> ListFiles(const QString& path) = 0;
     // 根据路径定位文件
-    virtual QRecordFile* GetFileForPath(const QString& path) { return 0; }
-
+    virtual QRecordFile* GetFileForPath(const QString& path) = 0;
     // 拷贝文件
-    virtual bool CopyFile(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
-
+    virtual bool CopyFile(const QString& dstpath, const QString& srcpath, QFile& f) = 0;
     // 拷贝文件夹及所有子文件
-    virtual bool CopyDir(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
-
+    virtual bool CopyDir(const QString& dstpath, const QString& srcpath, QFile& f) = 0;
     // 拷贝文件
-    virtual bool CopyFile(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
-
+    virtual bool CopyFile(const QString& dstpath, const QRecordFile* filerecord, QFile& f) = 0;
     // 拷贝文件夹及所有子文件
-    virtual bool CopyDir(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
-
-    // 爆搜搜索文件
-    virtual QVector<QRecordFile*> BruteForceSearch() { return QVector<QRecordFile*>(); }
-
-    virtual ~QPartition() {}
+    virtual bool CopyDir(const QString& dstpath, const QRecordFile* filerecord, QFile& f) = 0;
 
 public:
-    unsigned char type;         // 磁盘类型
+    QString uniqueid; // 唯一标识该分区的字符串，用于数据库查询
+    unsigned int type;         // 磁盘类型
     unsigned long long begin;   // 起始偏移
     unsigned long long size;    // 分区大小
 };
+
+class QCommonPartition : public QPartition
+{
+public:
+    QCommonPartition() {}
+    virtual ~QCommonPartition() {}
+
+    QCommonPartition(QFile& f, unsigned int type, unsigned long long begin, unsigned long long size)
+    {
+        this->type = type;
+        this->begin = begin;
+        this->size = size;
+
+        const int DEFAULT_SECTOR_SIZE = 0x200;
+        char buf[DEFAULT_SECTOR_SIZE];
+        f.seek(begin);
+        f.read(buf, DEFAULT_SECTOR_SIZE);
+        QByteArray headdata = QByteArray::fromRawData(buf, DEFAULT_SECTOR_SIZE);
+        this->uniqueid = QCryptographicHash::hash(headdata, QCryptographicHash::Md5).toHex();
+    }
+
+    virtual bool Analysis(QFile& f) { return true; }
+    // 解析分区，检测是否有误
+    virtual bool IsValid() { return true; }
+    // 获取根目录文件
+    virtual QVector<QRecordFile*> GetRootFiles() { return QVector<QRecordFile*>(); }
+    // 获取当前目录下的文件和目录
+    virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord)  { return QVector<QRecordFile*>(); }
+    virtual QVector<QRecordFile*> ListFiles(const QString& path) { return QVector<QRecordFile*>(); }
+    // 根据路径定位文件
+    virtual QRecordFile* GetFileForPath(const QString& path) { return 0; }
+    // 拷贝文件
+    virtual bool CopyFile(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
+    // 拷贝文件夹及所有子文件
+    virtual bool CopyDir(const QString& dstpath, const QString& srcpath, QFile& f)  { return false; }
+    // 拷贝文件
+    virtual bool CopyFile(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
+    // 拷贝文件夹及所有子文件
+    virtual bool CopyDir(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
+
+public:
+    int unused;
+};
+
+// 分区表格式 GPT / MBR / 动态磁盘
+
+#pragma pack(push)
+#pragma pack(1)
+struct PartitionTableEntry
+{
+    unsigned char bootindicator;    // 活动分区0x80
+    unsigned char starthead;        // 开始磁头
+    unsigned short startsector:6;    // 起始扇区
+    unsigned short startcylinder:10;// 起始柱面
+    unsigned char typeindicator;    // 类型描述
+    unsigned char endhead;          // 结束磁头
+    unsigned short endsector:6;      // 结束扇区
+    unsigned short endcylinder:10;  // 结束柱面
+    unsigned int sectorprecede;     // 之前的扇区数
+    unsigned int sectornum;         // 总扇区数
+};
+#pragma pack(pop)
+
+struct MasterBootRecord
+{
+    unsigned char loader_code[0x1B8];   // 加载器代码
+    unsigned char disksig[4];           // 58 3F 98 EC
+    unsigned char nop[2];
+    PartitionTableEntry entry[4];       // 分区表
+    unsigned char endsig[2];            // 结束符 55 AA
+};
+
+struct EfiPartitionHeader
+{
+    unsigned char signature[8];         // 签名 EFI PART
+    unsigned int revision;              // 版本号
+    unsigned int headersize;            // GPT头字节总数
+    unsigned int headercrc32;           // GPT头CRC校验和
+    unsigned int reserved;              // 保留
+    unsigned long long currentlba;      // GPT头所在扇区号
+    unsigned long long backuplba;       // GPT头备份所在扇区号
+    unsigned long long firstusablelba;  // GPT分区区域起始扇区号
+    unsigned long long lastusablelba;   // GPT分区区域结束扇区号
+    unsigned char diskguid[16];         // 磁盘GUID
+    unsigned long long partitionlba;    // GPT分区表起始扇区号
+    unsigned int numpartitions;         // 分区表项数
+    unsigned int partitionsize;         // 每个分区表项的字节数
+    unsigned int partitioncrc32;        // 分区表CRC校验和
+    unsigned char empty[420];           // 保留
+};
+
+struct EfiPartitionEntry
+{
+    union
+    {
+        unsigned int type;                  // 分区类型
+        unsigned char typeguid[16];         // 分区类型GUID
+    } u;
+    unsigned char paritionguid[16];         // 分区GUID
+    unsigned long long firstlba;            // 分区起始地址
+    unsigned long long lastlba;             // 分区结束地址
+    unsigned long long prop;                // 分区属性
+    wchar_t name[36];                       // 分区名
+};
+
+class QDisk
+{
+public:
+    struct MasterBootRecord mbr; // Main Boot Record
+    QVector<QPartition*> partitions; // 避免资源占用
+    QString symbol;
+    bool valid;
+    QString uniqueid; // 唯一标识该磁盘的字符串，用于数据库查询
+    unsigned long long size;
+    unsigned int type;
+
+    enum
+    {
+        DEFAULT_SECTOR_SIZE = 0x200,
+        DEFAULT_GPT_HEADER_SIZE = 0x200,
+    };
+
+public:
+    QDisk();
+    QDisk(QFile& f);
+    virtual void UpdateSize(QFile& f);
+    virtual void commonHandler(QFile& f, const PartitionTableEntry& entry, unsigned int basesec = 0);
+    virtual void handleExtended(QFile& f, unsigned int sectorprecede, unsigned int basesec);
+    virtual void handleLegacyMbrEfi(QFile& f, unsigned int sectorprecede);
+    virtual bool IsValid();
+};
+
+class QDiskUtils
+{
+private:
+    static QMutex lock;
+    static QHash<QString, QPartition*> g_part;
+public:
+    static const char* GetTypeStr(int type);
+    static QPartition* AddPartition(QPartition* part);
+    static QVector<QPartition*> GetPartitions();
+    static QPartition* GetPartition(QString id);
+    static void Free();
+    static void GetPhysicalDrives(QVector<QDisk>& disks, QVector<QString> addition = QVector<QString>());
+};
+
 
 #endif // PARTITION_H

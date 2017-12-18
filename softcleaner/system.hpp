@@ -3,7 +3,7 @@
 
 // 系统垃圾清理
 
-#include "../cleaner.h"
+#include "../cleaner.hpp"
 
 class QSystemCleaner : public QCleaner
 {

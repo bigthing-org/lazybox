@@ -3,6 +3,9 @@
 
 #include <QMainWindow>
 
+
+
+
 namespace Ui {
 class LazyBoxWindow;
 }

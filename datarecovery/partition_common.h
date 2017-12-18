@@ -1,5 +1,0 @@
-#ifndef PARTITION_COMMON_H
-#define PARTITION_COMMON_H
-
-
-#endif // PARTITION_COMMON_H

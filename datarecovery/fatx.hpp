@@ -1,15 +1,10 @@
 #ifndef FAT32_H
 #define FAT32_H
 
-#include <stdint.h>
 #include "partition.h"
-
-#pragma pack(push)
-#pragma pack(1)
 
 namespace FAT
 {
-
     enum
     {
         PRSIZE = 0x800,
@@ -33,6 +28,9 @@ namespace FAT
         ATTR_EXT      = (ATTR_RO | ATTR_HIDDEN | ATTR_SYS | ATTR_VOLUME),
         ATTR_EXT_MASK = (ATTR_RO | ATTR_HIDDEN | ATTR_SYS | ATTR_VOLUME | ATTR_DIR | ATTR_ARCH),
     };
+
+#pragma pack(push)
+#pragma pack(1)
 
     struct fat_boot_sector
     {
@@ -128,7 +126,7 @@ namespace FAT
         } msdos_dir_slot;
     };
 
-    #pragma pack(pop)
+#pragma pack(pop)
 
 
     unsigned int fat_sector_size(const struct fat_boot_sector *fat_header)
@@ -177,27 +175,130 @@ namespace FAT
         char16_t filename[260];         // 文件名
 
     public:
-        virtual bool IsDir() { return flags & ATTR_DIR; }
-        virtual bool IsFile() { return flags & ATTR_ARCH; } // ??
-        virtual unsigned long long GetFileSize() { return datasize; }
-        virtual int GetType() { return PARTITION_TYPE_FAT; }
+        virtual bool IsDir() { return this->flags & ATTR_DIR; }
+        virtual bool IsFile() { return this->flags & ATTR_ARCH; } // ??
+        virtual unsigned long long GetFileSize() { return this->datasize; }
+        virtual int GetType() { return PARTITION_TYPE_FAT32; }
+        virtual QString GetName() { return QString::fromUtf16(this->filename); }
     };
 
     class QFatPartition : public QPartition
     {
     public:
-
         QFatPartition(QFile& f, unsigned long long begin, unsigned long long size)
         {
             this->begin = begin;
             this->size = size;
             this->type = 0; // 设置为无效
             this->readHeader(f);
-            this->readFAT(f);
-
-            this->type = PARTITION_TYPE_FAT; // 设置为有效
+            this->type = PARTITION_TYPE_FAT32; // 设置为有效
+            this->Analysis(f);
         }
 
+        bool Analysis(QFile& f)
+        {
+            this->readFAT(f);
+            return true;
+        }
+
+        // 解析分区，检测是否有误
+        virtual bool IsValid()
+        {
+            return this->errtype == 0;
+        }
+
+        // 获取根目录文件
+        virtual QVector<QRecordFile*> GetRootFiles()
+        {
+            QVector<QRecordFile*> result;
+            for (QFatFileRecord& ff : filesystem[FAT_ROOT_INDX])
+            {
+                result.push_back(static_cast<QRecordFile*>(&ff));
+            }
+            return result;
+        }
+
+        // 获取当前目录下的文件和目录
+        virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord)
+        {
+            QVector<QRecordFile*> result;
+            if (const_cast<QRecordFile*>(filerecord)->GetType() != PARTITION_TYPE_FAT32)
+            {
+                return result;
+            }
+            unsigned long fatinx = ((QFatFileRecord*)filerecord)->fatindx;
+            for (QFatFileRecord& ff : filesystem[fatinx])
+            {
+                result.push_back(static_cast<QRecordFile*>(&ff));
+            }
+            return result;
+        }
+
+        virtual QVector<QRecordFile*> ListFiles(const QString& path)
+        {
+            if (path == "/")
+            {
+                return GetRootFiles();
+            }
+            QRecordFile* f = this->GetFileForPath(path);
+            if (f == 0)
+            {
+                return QVector<QRecordFile*>();
+            }
+            return this->ListFiles(f);
+        }
+
+        // 根据路径定位文件
+        virtual QRecordFile* GetFileForPath(const QString& path)
+        {
+            // 路径形式:  /a/b/c/d.txt
+            int current_fat = FAT_ROOT_INDX;
+            QVector<QRecordFile*> result;
+            QStringList path_vec;
+            for (const QString& p : path.split("/"))
+            {
+                if (p.length() != 0)
+                {
+                    path_vec.push_back(p);
+                }
+            }
+            QFatFileRecord* target = 0;
+            for (const QString& p : path_vec)
+            {
+                bool find = false;
+                for (QFatFileRecord& file : filesystem[current_fat])
+                {
+                    if (file.GetName() == p)
+                    {
+                        current_fat = file.fatindx;
+                        target = &file;
+                        find = true;
+                    }
+                }
+                if (!find)
+                {
+                    break;
+                }
+            }
+            return target;
+        }
+
+        //拷贝文件
+        virtual bool CopyFile(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
+
+        //拷贝文件夹及所有子文件
+        virtual bool CopyDir(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
+
+        //拷贝文件
+        virtual bool CopyFile(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
+
+        //拷贝文件夹及所有子文件
+        virtual bool CopyDir(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
+
+
+        virtual ~QFatPartition() {}
+
+    private:
         virtual void readHeader(QFile& f)
         {
             f.seek(this->begin + HEADER_OFF);
@@ -206,35 +307,31 @@ namespace FAT
             this->sectors_per_cluster = this->fat_header.sectors_per_cluster;
             this->sector_size = this->fat_header.sector_size;
             uint8_t* asm_ = this->fat_header.ignored;
-            if (this->fat_header.marker == 0xAA55 && (asm_[0] == 0xeb || asm_[0] == 0xe9) &&
-                    (this->fat_header.fats == 1 || this->fat_header.fats == 2))
+            this->errtype = 0;
+            if (!(this->fat_header.marker == 0xAA55 && (asm_[0] == 0xeb || asm_[0] == 0xe9) &&
+                    (this->fat_header.fats == 1 || this->fat_header.fats == 2)))
             { // Not FAT
-                errtype = 1;
-                return;
+                this->errtype |= 1;
             }
 
             if (!((asm_[0] == 0xeb && asm_[2] == 0x90) || asm_[0] == 0xe9))
             {
-                errtype = 2;
-                return;
+                this->errtype |= 2;
             }
             switch (this->fat_header.sectors_per_cluster)
             {
               case 1: case 2: case 4: case 8: case 16: case 32: case 64: case 128:
                 break;
               default:
-                this->errtype = 9;
-                return;
+                this->errtype |= 4;
             }
-            if (this->fat_header.fats == 1 || this->fat_header.fats == 2)
+            if (!(this->fat_header.fats == 1 || this->fat_header.fats == 2))
             {// Bad number
-                this->errtype = 10;
-                return;
+                this->errtype |= 8;
             }
             if (this->fat_header.media != 0xf0 && this->fat_header.media < 0xf8)
             {/* Legal values are 0xF0, 0xF8-0xFF */
-                this->errtype = 11;
-                return;
+                this->errtype |= 16;
             }
 
             uint64_t start_fat1;
@@ -247,7 +344,10 @@ namespace FAT
             unsigned long int fat_length_calc;
 
             fat_length = this->fat_header.fat_length > 0 ? this->fat_header.fat_length : this->fat_header.fat32_length;
-            this->direntryoff = this->begin + (this->fat_header.reserved + fat_length * this->fat_header.fats) * this->sector_size;
+            unsigned long long t1 = this->fat_header.reserved + fat_length * this->fat_header.fats;
+            t1 += ((unsigned long long)(this->fat_header.root_cluster - 2)) * this->sectors_per_cluster;
+            t1 *= sector_size;
+            this->direntryoff = this->begin +  t1;
 
             part_size = fat_sectors(&this->fat_header) > 0 ? fat_sectors(&this->fat_header) : this->fat_header.total_sect;
             start_fat1 = this->fat_header.reserved;
@@ -261,13 +361,11 @@ namespace FAT
             {
                 if ((get_dir_entries(&this->fat_header) == 0 || (get_dir_entries(&this->fat_header) % 16) != 0))
                 {
-                    this->errtype = 12;
-                    return;
+                    this->errtype |= 0x20;
                 }
                 if (this->fat_header.fat_length > 256 || this->fat_header.fat_length == 0)
                 {
-                    this->errtype = 13;
-                    return;
+                    this->errtype |= 0x40;
                 }
                 start_rootdir = start_fat2 + fat_length;
                 fat_length_calc = ((no_of_cluster + 2 + fat_sector_size(&this->fat_header) * 2 / 3 - 1) * 3 / 2 / fat_sector_size(&this->fat_header));
@@ -276,13 +374,11 @@ namespace FAT
             {
                 if(this->fat_header.fat_length == 0)
                 {
-                    this->errtype = 14;
-                    return;
+                    this->errtype |= 0x80;
                 }
                 if (get_dir_entries(&this->fat_header) == 0 || (get_dir_entries(&this->fat_header) % 16) != 0)
                 {
-                    this->errtype = 15;
-                    return;
+                    this->errtype |= 0x100;
                 }
                 start_rootdir = start_fat2 + fat_length;
                 fat_length_calc = ((no_of_cluster + 2 + fat_sector_size(&this->fat_header) / 2 - 1) * 2 / fat_sector_size(&this->fat_header));
@@ -291,27 +387,24 @@ namespace FAT
             {
                 if (fat_sectors(&this->fat_header) != 0)
                 {
-                    this->errtype = 16;
-                    return;
+                    this->errtype |= 0x200;
                 }
                 if (get_dir_entries(&this->fat_header) != 0)
                 {
-                    this->errtype = 17;
-                    return;
+                    this->errtype |= 0x400;
                 }
                 if(this->fat_header.root_cluster < 2 || this->fat_header.root_cluster >= 2 + no_of_cluster)
                 {
-                    this->errtype = 18;
-                    return;
+                    this->errtype |= 0x800;
                 }
+
                 start_rootdir = start_data + (uint64_t)(this->fat_header.root_cluster - 2) * this->fat_header.sectors_per_cluster;
                 fat_length_calc = ((no_of_cluster + 2 + fat_sector_size(&this->fat_header) / 4 - 1) * 4 / fat_sector_size(&this->fat_header));
             }
 
             if (fat_length < fat_length_calc)
             {
-                this->errtype = 19;
-                return;
+                this->errtype |= 0x1000;
             }
 
             QByteArray headdata = QByteArray::fromRawData((char*)&this->fat_header, sizeof(this->fat_header));
@@ -381,7 +474,9 @@ namespace FAT
             file_record.creationtime = shortentry->msdos_dir_entry.cdate;// 创建（日期）dos时间
             file_record.modifiedtime = shortentry->msdos_dir_entry.date;
             file_record.fatindx = shortentry->msdos_dir_entry.start | (shortentry->msdos_dir_entry.starthi << 16);
-            file_record.databegin = this->direntryoff + (file_record.fatindx - this->fat_header.fats) * this->sectors_per_cluster * this->sector_size;
+            file_record.databegin = file_record.fatindx - this->fat_header.fats;
+            file_record.databegin *= this->sectors_per_cluster * this->sector_size;
+            file_record.databegin += this->direntryoff;
             file_record.datasize = shortentry->msdos_dir_entry.size;
 
             if ((file_record.flags & ATTR_DIR) != 0)
@@ -421,14 +516,26 @@ namespace FAT
             return fatsize;
         }
 
+        virtual void AddSubDirs(QQueue<unsigned long long>& dirobj, unsigned long long base)
+        {
+            const int CLUSTER = 4096; // 按簇读取
+            unsigned long indx = (unsigned long)((base - this->direntryoff) / sizeof(msdos_dir));
+        }
+
         virtual void readFAT(QFile& f)
         {
-            bool rootend = false;
-            unsigned long long offset = this->direntryoff;
-            while (!rootend)
+            QQueue<unsigned long long> dirobj;
+            dirobj.enqueue(this->direntryoff);
+            while (dirobj.size() > 0)
             {
-                unsigned char buf[BLOCK_SIZE + PRSIZE]; // 保护措施，防止FAT属性被1M大小分割
-                memset(buf, 0, sizeof(buf));
+                unsigned long long base = dirobj.dequeue();
+                AddSubDirs(dirobj, base);
+            }
+
+            while (!rootend)
+            {//............todo 改进new
+                unsigned char *buf = new unsigned char[BLOCK_SIZE + PRSIZE]; // 保护措施，防止FAT属性被1M大小分割
+                memset(buf, 0, sizeof(BLOCK_SIZE + PRSIZE));
                 f.seek(offset);
                 f.read((char*)buf, BLOCK_SIZE + PRSIZE);
                 unsigned long offset_l = 0;
@@ -446,57 +553,6 @@ namespace FAT
             }
         }
 
-        // 解析分区，检测是否有误
-        virtual bool IsValid()
-        {
-            return this->errtype == 0;
-        }
-
-        // 获取根目录文件
-        virtual QVector<QRecordFile*> GetRootFiles()
-        {
-            QVector<QRecordFile*> result;
-            for (QFatFileRecord& ff : filesystem[FAT_ROOT_INDX])
-            {
-                result.push_back(static_cast<QRecordFile*>(&ff));
-            }
-            return result;
-        }
-
-        // 获取当前目录下的文件和目录
-        virtual QVector<QRecordFile*> ListFiles(const QRecordFile* filerecord)
-        {
-            QVector<QRecordFile*> result;
-            if (const_cast<QRecordFile*>(filerecord)->GetType() != PARTITION_TYPE_FAT)
-            {
-                return result;
-            }
-            unsigned long fatinx = ((QFatFileRecord*)filerecord)->fatindx;
-            for (QFatFileRecord& ff : filesystem[fatinx])
-            {
-                result.push_back(static_cast<QRecordFile*>(&ff));
-            }
-            return result;
-        }
-
-        // 根据路径定位文件
-        virtual QRecordFile* GetFileForPath(const QString& path) { return 0; }
-
-        //拷贝文件
-        virtual bool CopyFile(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
-
-        //拷贝文件夹及所有子文件
-        virtual bool CopyDir(const QString& dstpath, const QString& srcpath, QFile& f) { return false; }
-
-        //拷贝文件
-        virtual bool CopyFile(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
-
-        //拷贝文件夹及所有子文件
-        virtual bool CopyDir(const QString& dstpath, const QRecordFile* filerecord, QFile& f) { return false; }
-
-
-        virtual ~QFatPartition() {}
-
     private:
 
         unsigned long long GetNewIndx()
@@ -505,7 +561,6 @@ namespace FAT
             return gindx++;
         }
 
-        QString uniqueid; // 唯一标识该分区的字符串，用于数据库查询
         fat_boot_sector fat_header;
         int errtype; // 如果分区存在错误则记录
         int sectors_per_cluster;

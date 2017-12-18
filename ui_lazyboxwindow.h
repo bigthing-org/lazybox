@@ -38,6 +38,7 @@ public:
     {
         if (LazyBoxWindow->objectName().isEmpty())
             LazyBoxWindow->setObjectName(QStringLiteral("LazyBoxWindow"));
+        LazyBoxWindow->resize(448, 261);
         centralWidget = new QWidget(LazyBoxWindow);
         centralWidget->setObjectName(QStringLiteral("centralWidget"));
         pushButton = new QPushButton(centralWidget);

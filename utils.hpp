@@ -21,7 +21,7 @@ public:
     {
         QDir dir(root);
         QRegExp rx(filter);
-        for (const QFileInfo& fi : dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot))
+        for (const QFileInfo& fi : dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::AccessMask))
         {
             QString p = fi.absoluteFilePath();
             if (fi.isFile() && (filter.isEmpty() || rx.exactMatch(p)))
