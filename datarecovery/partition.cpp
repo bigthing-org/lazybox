@@ -13,6 +13,8 @@ QDisk::QDisk()
 
 QDisk::QDisk(QFile& f)
 {
+    // 分区文件f可以是\\\\.\\PhysicalDrive这种本地硬盘形式，未来也可以支持ISO、GHO等类型的文件
+    // 我通常在小容量U盘上进行分区，然后用Winhex将整个U盘扇区写入文件，然后解析文件即可，避免调试UAC权限的程序
     this->type = 0;
     this->valid = false;
     this->symbol = f.fileName();
@@ -33,7 +35,7 @@ QDisk::QDisk(QFile& f)
 
 void QDisk::UpdateSize(QFile& f)
 {
-
+    // 由于对于扇区文件，f.size()不能获取大小，因此二分法确定磁盘大小
     this->size = f.size();
 
     if (this->size <= 0)
@@ -61,14 +63,15 @@ void QDisk::UpdateSize(QFile& f)
 
 void QDisk::commonHandler(QFile& f, const PartitionTableEntry& entry, unsigned int basesec)
 {
+    // 根据分区类型确定处理分区
     int disktype = entry.typeindicator;
     switch(disktype)
     {
     case EMPTY:
-        // Empty
+        // Empty  空分区，标志分区结束
         break;
     case EXTENDED:
-        // 扩展分区
+        // 扩展分区：MBR只能存放4个分区，扩展分区一般用于容纳超过4个分区的情况，可以多层嵌套
         {
             unsigned long long begin = basesec + entry.sectorprecede;
             begin *= DEFAULT_SECTOR_SIZE;
@@ -114,7 +117,7 @@ void QDisk::commonHandler(QFile& f, const PartitionTableEntry& entry, unsigned i
         }
         break;
     case WIN95_EXT_PARTITION:
-        // 扩展分区
+        // 扩展分区，类似于EXTENDED
         {
             unsigned long long begin = basesec + entry.sectorprecede;
             begin *= DEFAULT_SECTOR_SIZE;
@@ -201,6 +204,7 @@ void QDisk::commonHandler(QFile& f, const PartitionTableEntry& entry, unsigned i
 
 void QDisk::handleExtended(QFile& f, unsigned int sectorprecede, unsigned int basesec)
 {
+    // 解析扩展分区
     struct MasterBootRecord extended;
     qint64 offset = sectorprecede + basesec;
     offset *= DEFAULT_SECTOR_SIZE; // 必须分开写，合写存在64位运算存在问题
@@ -211,12 +215,11 @@ void QDisk::handleExtended(QFile& f, unsigned int sectorprecede, unsigned int ba
     {
         this->commonHandler(f, extended.entry[i], sectorprecede + basesec);
     }
-
-    // todo   扩展分区作为一个特殊QPartition添加到partitions，方便管理
 }
 
 void QDisk::handleLegacyMbrEfi(QFile& f, unsigned int sectorprecede)
 {
+    // 解析GPT分区格式
     struct EfiPartitionHeader header;
     qint64 offset = sectorprecede;
     offset *= DEFAULT_SECTOR_SIZE;
@@ -301,6 +304,7 @@ const char* QDiskUtils::GetTypeStr(int type)
 
 QPartition* QDiskUtils::AddPartition(QPartition* part)
 {
+    // 分区对象交给QDiskUtils维护
     QMutexLocker locker(&lock);
     if (part != 0)
     {

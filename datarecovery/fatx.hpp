@@ -520,6 +520,7 @@ namespace FAT
         {
             const int CLUSTER = 4096; // 按簇读取
             unsigned long indx = (unsigned long)((base - this->direntryoff) / sizeof(msdos_dir));
+            
         }
 
         virtual void readFAT(QFile& f)
@@ -532,8 +533,10 @@ namespace FAT
                 AddSubDirs(dirobj, base);
             }
 
+            /*
             while (!rootend)
             {//............todo 改进new
+
                 unsigned char *buf = new unsigned char[BLOCK_SIZE + PRSIZE]; // 保护措施，防止FAT属性被1M大小分割
                 memset(buf, 0, sizeof(BLOCK_SIZE + PRSIZE));
                 f.seek(offset);
@@ -550,7 +553,9 @@ namespace FAT
                 }
 
                 offset += BLOCK_SIZE; // 如果目录较大则一部分文件会重复
+
             }
+            */
         }
 
     private:
